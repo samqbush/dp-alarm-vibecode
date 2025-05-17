@@ -251,9 +251,9 @@
   </div>
   
   <div class="info-box">
-    <p>📊 Visualized wind speed, gusts, and direction for the <strong>2am-7am window</strong> with special focus on <span class="highlight">3am-5am</span> for alarm decision.</p>
+    <p>📊 Visualized wind speed, gusts, and direction for the <strong>2am-8am window</strong> with special focus on <span class="highlight">3am-5am</span> for alarm prediction and <span style="background-color: rgba(0, 191, 255, 0.2); padding: 0 3px;">6am-8am</span> for accuracy verification.</p>
     <p>🔄 All wind speeds shown in mph (converted from source data in kph).</p>
-    <p>🔍 Yellow highlighted region shows the 3am-5am period that determines if conditions are alarm worthy.</p>
+    <p>🔍 Yellow highlighted region (3am-5am) determines if conditions are alarm worthy, while blue region (6am-8am) verifies prediction accuracy.</p>
   </div>
   
   <div id="chart-container">
@@ -322,6 +322,36 @@
           <input type="range" id="maxTargetDirDiff" min="15" max="90" step="5" value="45">
           <small>How close wind must be to target direction (degrees)</small>
         </div>
+        
+        <!-- Accuracy Tracking Settings -->
+        <div class="setting-item" style="grid-column: span 2; border-top: 1px solid var(--info-border); padding-top: 10px; margin-top: 10px;">
+          <h3>Accuracy Verification Settings (6am-8am)</h3>
+          <p>Settings to verify the accuracy of predictions by checking actual conditions from 6am-8am</p>
+        </div>
+        
+        <div class="setting-item">
+          <label>Verification Min Speed <span class="value-indicator" id="verificationMinSpeedValue">15 mph</span></label>
+          <input type="range" id="verificationMinSpeed" min="5" max="30" step="1" value="15">
+          <small>Minimum wind speed for actual good conditions (6-8am)</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Verification Direction <span class="value-indicator" id="verificationDirectionValue">NW (315°)</span></label>
+          <input type="range" id="verificationDirection" min="0" max="355" step="5" value="315">
+          <small>Target wind direction for verification (6-8am)</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Verification Direction Diff <span class="value-indicator" id="verificationDirDiffValue">45°</span></label>
+          <input type="range" id="verificationDirDiff" min="15" max="90" step="5" value="45">
+          <small>Max direction difference for verification</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Verification Min Duration <span class="value-indicator" id="verificationMinDurationValue">60 min</span></label>
+          <input type="range" id="verificationMinDuration" min="15" max="120" step="15" value="60">
+          <small>Min duration of good conditions (minutes)</small>
+        </div>
       </div>
       
       <button id="saveSettings" class="save-settings-btn">Save Settings</button>
@@ -339,13 +369,25 @@
       minPointSpeed: 8,         // Minimum wind speed for an individual point to be considered "good"
       maxDirDeviation: 40,      // Maximum direction deviation (degrees)
       targetDirection: 315,     // Target wind direction (NW = 315°)
-      maxTargetDirDiff: 45      // Maximum allowed difference from target direction (degrees)
+      maxTargetDirDiff: 45,     // Maximum allowed difference from target direction (degrees)
+      // Accuracy tracking settings
+      verificationMinSpeed: 15, // Minimum wind speed for verification (actual conditions 6-8am)
+      verificationDirection: 315, // Target wind direction for verification (NW = 315°)
+      verificationDirDiff: 45,  // Maximum allowed difference from target direction for verification
+      verificationMinDuration: 60 // Minimum duration in minutes of good conditions (roughly 4 data points)
     };
     
     // Load settings from localStorage or use defaults
     let savedSettings = JSON.parse(localStorage.getItem('windAlarmSettings')) || {};
     // Merge saved settings with defaults to ensure all properties exist
     let alarmSettings = {...defaultSettings, ...savedSettings};
+    
+    // Load historical accuracy data
+    let accuracyData = JSON.parse(localStorage.getItem('windAlarmAccuracy')) || {
+      predictions: 0,
+      correctPredictions: 0,
+      history: []
+    };
     
     // Handle dark mode toggle and other UI interactions
     document.addEventListener('DOMContentLoaded', () => {
@@ -456,6 +498,19 @@
       
       document.getElementById('maxTargetDirDiff').value = alarmSettings.maxTargetDirDiff;
       document.getElementById('maxTargetDirDiffValue').textContent = alarmSettings.maxTargetDirDiff + '°';
+      
+      // Accuracy tracking settings
+      document.getElementById('verificationMinSpeed').value = alarmSettings.verificationMinSpeed;
+      document.getElementById('verificationMinSpeedValue').textContent = alarmSettings.verificationMinSpeed + ' mph';
+      
+      document.getElementById('verificationDirection').value = alarmSettings.verificationDirection;
+      document.getElementById('verificationDirectionValue').textContent = getDirectionText(alarmSettings.verificationDirection) + ' (' + alarmSettings.verificationDirection + '°)';
+      
+      document.getElementById('verificationDirDiff').value = alarmSettings.verificationDirDiff;
+      document.getElementById('verificationDirDiffValue').textContent = alarmSettings.verificationDirDiff + '°';
+      
+      document.getElementById('verificationMinDuration').value = alarmSettings.verificationMinDuration;
+      document.getElementById('verificationMinDurationValue').textContent = alarmSettings.verificationMinDuration + ' min';
     }
     
     // Update setting display value as user adjusts slider
@@ -466,14 +521,16 @@
       
       // Add units to display value
       let displayValue = value;
-      if (id === 'minAvgSpeed' || id === 'minPointSpeed') {
+      if (id === 'minAvgSpeed' || id === 'minPointSpeed' || id === 'verificationMinSpeed') {
         displayValue += ' mph';
       } else if (id === 'minDirConsistency') {
         displayValue += '%';
-      } else if (id === 'maxDirDeviation' || id === 'maxTargetDirDiff') {
+      } else if (id === 'maxDirDeviation' || id === 'maxTargetDirDiff' || id === 'verificationDirDiff') {
         displayValue += '°';
-      } else if (id === 'targetDirection') {
+      } else if (id === 'targetDirection' || id === 'verificationDirection') {
         displayValue = getDirectionText(parseInt(value)) + ' (' + value + '°)';
+      } else if (id === 'verificationMinDuration') {
+        displayValue += ' min';
       }
       
       document.getElementById(displayId).textContent = displayValue;
@@ -489,7 +546,12 @@
         minPointSpeed: parseFloat(document.getElementById('minPointSpeed').value),
         maxDirDeviation: parseFloat(document.getElementById('maxDirDeviation').value),
         targetDirection: parseInt(document.getElementById('targetDirection').value),
-        maxTargetDirDiff: parseFloat(document.getElementById('maxTargetDirDiff').value)
+        maxTargetDirDiff: parseFloat(document.getElementById('maxTargetDirDiff').value),
+        // Verification settings
+        verificationMinSpeed: parseFloat(document.getElementById('verificationMinSpeed').value),
+        verificationDirection: parseInt(document.getElementById('verificationDirection').value),
+        verificationDirDiff: parseFloat(document.getElementById('verificationDirDiff').value),
+        verificationMinDuration: parseInt(document.getElementById('verificationMinDuration').value)
       };
       
       localStorage.setItem('windAlarmSettings', JSON.stringify(alarmSettings));
@@ -624,8 +686,7 @@
       // More detailed analysis of wind consistency
       let consistentSegments = [];
       let currentSegment = [];
-      let maxConsecutivePoints =
- 0;
+      let maxConsecutivePoints = 0;
       
       // Check for consecutive points with good conditions
       if (filtered.length > 0) {
@@ -698,6 +759,7 @@
       
       let trendMessage = '';
       let alarmStatus = '';
+      let isPredictionGood = false;
       
       if (!hasEnoughData) {
         trendMessage = 'Not enough data for 3–5am trend analysis.';
@@ -717,25 +779,96 @@
         
         if (isSpeedGood && isFromTargetDirection && (isDirectionConsistent || hasConsistentStreak)) {
           alarmStatus = '<div class="status-good" style="font-size:1.3em">✅ ALARM WORTHY - Good conditions!</div>';
+          isPredictionGood = true;
         } else if (isSpeedGood && isFromTargetDirection) {
           alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good speed and direction but not consistent enough</div>';
+          isPredictionGood = false;
         } else if (isSpeedGood && (isDirectionConsistent || hasConsistentStreak)) {
           alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good speed but wrong direction</div>';
+          isPredictionGood = false;
         } else if (isFromTargetDirection && (isDirectionConsistent || hasConsistentStreak)) {
           alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good direction but speed too low</div>';
+          isPredictionGood = false;
         } else {
           alarmStatus = '<div class="status-bad">❌ NOT ALARM WORTHY - Poor conditions</div>';
+          isPredictionGood = false;
         }
       }
+      
+      // Analyze verification data (6am-8am window)
+      const verificationResult = analyzeVerification(data);
+      
+      // Get today's date for tracking
+      const today = new Date().toLocaleDateString();
+      
+      // Check if we already have a prediction for today
+      const existingRecord = accuracyData.history.find(record => record.date === today);
+      
+      if (!existingRecord && hasEnoughData && verificationResult.hasEnoughData) {
+        // Record new prediction and outcome
+        accuracyData.predictions++;
+        if (isPredictionGood === verificationResult.result) {
+          accuracyData.correctPredictions++;
+        }
+        
+        // Add to history
+        accuracyData.history.push({
+          date: today,
+          prediction: isPredictionGood,
+          verification: verificationResult.result,
+          wasCorrect: isPredictionGood === verificationResult.result
+        });
+        
+        // Keep only the last 30 days
+        if (accuracyData.history.length > 30) {
+          accuracyData.history.shift();
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('windAlarmAccuracy', JSON.stringify(accuracyData));
+      }
+      
+      // Calculate accuracy percentage
+      const accuracyPercentage = accuracyData.predictions > 0 
+        ? Math.round((accuracyData.correctPredictions / accuracyData.predictions) * 100) 
+        : 0;
+      
+      // Create the verification section
+      let verificationSection = '';
+      if (verificationResult.hasEnoughData) {
+        verificationSection = `
+          <h2>6am-8am Verification Analysis</h2>
+          <p>${verificationResult.message}</p>
+          <p>Required: Speed ≥ ${alarmSettings.verificationMinSpeed} mph from ${getDirectionText(alarmSettings.verificationDirection)} 
+          (±${alarmSettings.verificationDirDiff}°) for at least ${alarmSettings.verificationMinDuration} minutes</p>
+        `;
+      } else {
+        verificationSection = `
+          <h2>6am-8am Verification Analysis</h2>
+          <p>Insufficient data for verification analysis</p>
+        `;
+      }
+      
+      // Create the accuracy tracking section
+      const accuracySection = `
+        <h2>Prediction Accuracy Tracking</h2>
+        <p>Total predictions: ${accuracyData.predictions}, Correct: ${accuracyData.correctPredictions}, 
+        Accuracy: <strong>${accuracyPercentage}%</strong></p>
+        <p>Last 7 days: ${accuracyData.history.slice(-7).map(day => day.wasCorrect ? '✅' : '❌').join(' ')}</p>
+      `;
       
       // Create a summary with trend analysis, alarm status, and max values
       return `<div>
                 <h2>3am-5am Wind Analysis</h2>
                 <p>${trendMessage}</p>
                 <p>${alarmStatus}</p>
-                <p><strong>Max values (2am-7am window):</strong> Wind speed: ${maxSpeed.toFixed(1)} mph at ${maxSpeedTime} | Wind gust: ${maxGust.toFixed(1)} mph at ${maxGustTime}</p>
+                <p><strong>Max values (2am-8am window):</strong> Wind speed: ${maxSpeed.toFixed(1)} mph at ${maxSpeedTime} | Wind gust: ${maxGust.toFixed(1)} mph at ${maxGustTime}</p>
                 <p><strong>Current alarm criteria:</strong> Avg speed ≥ ${alarmSettings.minAvgSpeed} mph, Direction consistency ≥ ${alarmSettings.minDirConsistency}%, Min consecutive good points: ${alarmSettings.minConsecutivePoints}</p>
-                <p><small>Note: Analysis focuses on 3am-5am for alarm decision, but chart shows 2am-7am for context. <a href="#" onclick="document.getElementById('settingsBtn').click(); return false;">Adjust alarm settings</a></small></p>
+                
+                ${verificationSection}
+                ${accuracySection}
+                
+                <p><small>Note: Analysis focuses on 3am-5am for prediction and 6am-8am for verification. <a href="#" onclick="document.getElementById('settingsBtn').click(); return false;">Adjust settings</a></small></p>
               </div>`;
     }
     
@@ -753,11 +886,11 @@
       // Set update time
       document.getElementById('update-time').textContent = new Date().toLocaleString();
       
-      // Filter data to show only the 2am to 7am window
+      // Filter data to show only the 2am to 8am window (includes both prediction and verification windows)
       const filteredData = allData.filter(row => {
         const d = new Date(row.time);
         const h = d.getHours();
-        return h >= 2 && h < 7; // Show only 2am to 7am
+        return h >= 2 && h < 8; // Show 2am to 8am to include both prediction and verification windows
       });
       
       // Use filtered data if it exists, otherwise use all data
@@ -833,39 +966,164 @@
       const targetAreaPlugin = {
         id: 'targetAreaPlugin',
         beforeDraw: (chart) => {
-          if (start3amIndex === -1 || end5amIndex === -1) return;
-          
           const ctx = chart.ctx;
           const xAxis = chart.scales.x;
           const yAxis = chart.scales.y;
-          const startPixel = xAxis.getPixelForValue(start3amIndex);
-          const endPixel = xAxis.getPixelForValue(end5amIndex);
           
           ctx.save();
-          ctx.fillStyle = 'rgba(255, 255, 0, 0.1)';
-          ctx.fillRect(startPixel, yAxis.top, endPixel - startPixel, yAxis.bottom - yAxis.top);
           
-          // Add vertical lines at 3am and 5am
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([5, 5]);
+          // Find indices for each hour in the dataset (2am through 8am)
+          const hourIndices = {
+            2: -1, 3: -1, 4: -1, 5: -1, 6: -1, 7: -1, 8: -1
+          };
           
-          // 3am line
-          ctx.moveTo(startPixel, yAxis.top);
-          ctx.lineTo(startPixel, yAxis.bottom);
+          // First pass: find the first occurrence of each hour
+          for (let i = 0; i < timePoints.length; i++) {
+            const hour = timePoints[i].getHours();
+            if (hour >= 2 && hour <= 8 && hourIndices[hour] === -1) {
+              hourIndices[hour] = i;
+            }
+          }
           
-          // 5am line
-          ctx.moveTo(endPixel, yAxis.top);
-          ctx.lineTo(endPixel, yAxis.bottom);
+          // Second pass: fill in missing hours with approximate positions
+          const foundHours = Object.entries(hourIndices).filter(([h, idx]) => idx !== -1);
+          if (foundHours.length > 0) {
+            foundHours.sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+            
+            // Fill in missing hour indices by interpolation or extrapolation
+            for (let h = 2; h <= 8; h++) {
+              if (hourIndices[h] === -1) {
+                // Find nearest hours before and after
+                let beforeHour = h - 1;
+                let afterHour = h + 1;
+                
+                while (beforeHour >= 2 && hourIndices[beforeHour] === -1) {
+                  beforeHour--;
+                }
+                
+                while (afterHour <= 8 && hourIndices[afterHour] === -1) {
+                  afterHour++;
+                }
+                
+                // Interpolate between two known points
+                if (beforeHour >= 2 && afterHour <= 8) {
+                  const beforeIdx = hourIndices[beforeHour];
+                  const afterIdx = hourIndices[afterHour];
+                  const totalHourDiff = afterHour - beforeHour;
+                  const currentHourDiff = h - beforeHour;
+                  const ratio = currentHourDiff / totalHourDiff;
+                  hourIndices[h] = Math.round(beforeIdx + (afterIdx - beforeIdx) * ratio);
+                }
+                // Extrapolate from before
+                else if (beforeHour >= 2) {
+                  const beforeH1 = beforeHour;
+                  let beforeH2 = beforeH1 - 1;
+                  while (beforeH2 >= 2 && hourIndices[beforeH2] === -1) {
+                    beforeH2--;
+                  }
+                  
+                  if (beforeH2 >= 2) {
+                    const avgPointsPerHour = (hourIndices[beforeH1] - hourIndices[beforeH2]) / (beforeH1 - beforeH2);
+                    hourIndices[h] = Math.round(hourIndices[beforeH1] + avgPointsPerHour * (h - beforeH1));
+                  } else {
+                    // Fallback - if we can't extrapolate, use the last point
+                    hourIndices[h] = timePoints.length - 1;
+                  }
+                }
+                // Extrapolate from after
+                else if (afterHour <= 8) {
+                  const afterH1 = afterHour;
+                  let afterH2 = afterH1 + 1;
+                  while (afterH2 <= 8 && hourIndices[afterH2] === -1) {
+                    afterH2++;
+                  }
+                  
+                  if (afterH2 <= 8) {
+                    const avgPointsPerHour = (hourIndices[afterH2] - hourIndices[afterH1]) / (afterH2 - afterH1);
+                    hourIndices[h] = Math.round(hourIndices[afterH1] - avgPointsPerHour * (afterH1 - h));
+                  } else {
+                    // Fallback - if we can't extrapolate, use the first point
+                    hourIndices[h] = 0;
+                  }
+                }
+              }
+              
+              // Ensure all indices are within valid range
+              hourIndices[h] = Math.max(0, Math.min(timePoints.length - 1, hourIndices[h] || 0));
+            }
+          }
           
-          ctx.stroke();
+          // Get indices for our analysis windows using our improved estimates
+          const start3amIndex = hourIndices[3];
+          const end5amIndex = hourIndices[5];
+          const start6amIndex = hourIndices[6];
+          const end8amIndex = hourIndices[8];
+          
+          console.log("Hour indices after interpolation:", hourIndices);
+          
+          // Draw the 3am-5am prediction window highlight (yellow)
+          if (start3amIndex !== -1 && end5amIndex !== -1) {
+            const startPixel = xAxis.getPixelForValue(start3amIndex);
+            const endPixel = xAxis.getPixelForValue(end5amIndex);
+            
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.1)';
+            ctx.fillRect(startPixel, yAxis.top, endPixel - startPixel, yAxis.bottom - yAxis.top);
+            
+            // Add vertical lines at 3am and 5am
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            // 3am line
+            ctx.moveTo(startPixel, yAxis.top);
+            ctx.lineTo(startPixel, yAxis.bottom);
+            
+            // 5am line
+            ctx.moveTo(endPixel, yAxis.top);
+            ctx.lineTo(endPixel, yAxis.bottom);
+            
+            ctx.stroke();
+          }
+          
+          // Draw the 6am-8am verification window highlight (light blue)
+          if (start6amIndex !== -1 && end8amIndex !== -1) {
+            const startPixel = xAxis.getPixelForValue(start6amIndex);
+            const endPixel = xAxis.getPixelForValue(end8amIndex);
+            
+            ctx.fillStyle = 'rgba(0, 191, 255, 0.1)'; // Light blue for verification window
+            ctx.fillRect(startPixel, yAxis.top, endPixel - startPixel, yAxis.bottom - yAxis.top);
+            
+            // Add 6am and 8am vertical lines
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)'; // Blue for verification window markers
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            // 6am line
+            ctx.moveTo(startPixel, yAxis.top);
+            ctx.lineTo(startPixel, yAxis.bottom);
+            
+            // 8am line
+            ctx.moveTo(endPixel, yAxis.top);
+            ctx.lineTo(endPixel, yAxis.bottom);
+            
+            ctx.stroke();
+          }
+          
           ctx.restore();
         }
       };
       
       // Register the custom plugin
       Chart.register(targetAreaPlugin);
+      
+      // Apply current color scheme based on dark mode
+      const isDarkMode = document.body.classList.contains('dark-mode');
+      const speedBorderColor = isDarkMode ? '#4d94ff' : 'blue';
+      const speedBackgroundColor = isDarkMode ? 'rgba(77, 148, 255, 0.1)' : 'rgba(0,0,255,0.1)';
+      const gustBorderColor = isDarkMode ? '#ffa500' : 'orange';
+      const gustBackgroundColor = isDarkMode ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255,165,0,0.1)';
       
       // Create chart configuration with dark mode support
       const chartConfig = {
@@ -876,8 +1134,8 @@
             {
               label: 'Wind Speed (mph)',
               data: data.map(row => row.windSpeed ? Number(row.windSpeed) : null), 
-              borderColor: () => document.body.classList.contains('dark-mode') ? '#4d94ff' : 'blue',
-              backgroundColor: () => document.body.classList.contains('dark-mode') ? 'rgba(77, 148, 255, 0.1)' : 'rgba(0,0,255,0.1)',
+              borderColor: speedBorderColor,
+              backgroundColor: speedBackgroundColor,
               yAxisID: 'y',
               tension: 0.2,
               spanGaps: true
@@ -885,8 +1143,8 @@
             {
               label: 'Wind Gust (mph)',
               data: data.map(row => row.windGust ? Number(row.windGust) : null),
-              borderColor: () => document.body.classList.contains('dark-mode') ? '#ffa500' : 'orange',
-              backgroundColor: () => document.body.classList.contains('dark-mode') ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255,165,0,0.1)',
+              borderColor: gustBorderColor,
+              backgroundColor: gustBackgroundColor,
               yAxisID: 'y',
               tension: 0.2,
               spanGaps: true,
@@ -905,8 +1163,8 @@
           plugins: {
             title: {
               display: true,
-              text: 'Wind Speed, Gust, and Direction (2am-7am)',
-              color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              text: 'Wind Speed, Gust, and Direction (2am-8am)',
+              color: isDarkMode ? '#f0f0f0' : '#333'
             },
             tooltip: {
               callbacks: {
@@ -920,17 +1178,17 @@
             legend: {
               position: 'top',
               labels: {
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               }
             }
           },
           scales: {
             x: {
               ticks: {
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               },
               grid: {
-                color: () => document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                color: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
               }
             },
             y: {
@@ -940,7 +1198,7 @@
               title: { 
                 display: true, 
                 text: 'Speed/Gust (mph)',
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               },
               max: yAxisMax,
               min: 0,
@@ -949,10 +1207,10 @@
                 callback: function(value) {
                   return value + ' mph';
                 },
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               },
               grid: {
-                color: () => document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                color: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
               }
             },
             y1: {
@@ -963,12 +1221,12 @@
               title: { 
                 display: true, 
                 text: 'Direction (°)',
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               },
               min: 0,
               max: 360,
               ticks: {
-                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+                color: isDarkMode ? '#f0f0f0' : '#333'
               }
             }
           }
@@ -984,6 +1242,94 @@
       // Update trend summary
       document.getElementById('trend-summary').innerHTML = summarizeTrend(data);
     }
+    
+    function analyzeVerification(data) {
+      // Filter data for the 6am-8am window for verification analysis
+      const verificationStartHour = 6;
+      const verificationEndHour = 8;
+      const verificationData = data.filter(row => {
+        const d = new Date(row.time);
+        const h = d.getHours();
+        return h >= verificationStartHour && h < verificationEndHour;
+      });
+      
+      // Check if we have enough data for verification
+      if (verificationData.length < 3) {
+        return {
+          hasEnoughData: false,
+          result: false,
+          message: "Insufficient data for 6am-8am verification"
+        };
+      }
+      
+      // Find consecutive periods with good conditions
+      let currentGoodStreak = 0;
+      let maxGoodStreak = 0;
+      let goodStreakStartTime = null;
+      let goodStreakEndTime = null;
+      
+      for (let i = 0; i < verificationData.length; i++) {
+        const speed = parseFloat(verificationData[i].windSpeed);
+        const dir = parseFloat(verificationData[i].windDirection);
+        
+        if (isNaN(speed) || isNaN(dir)) {
+          // Reset streak on invalid data
+          if (currentGoodStreak > maxGoodStreak) {
+            maxGoodStreak = currentGoodStreak;
+          }
+          currentGoodStreak = 0;
+          continue;
+        }
+        
+        // Check if this point meets the criteria
+        const diffFromTarget = Math.abs(dir - alarmSettings.verificationDirection);
+        const isFromTargetDirection = Math.min(diffFromTarget, 360 - diffFromTarget) <= alarmSettings.verificationDirDiff;
+        const hasGoodSpeed = speed >= alarmSettings.verificationMinSpeed;
+        
+        if (hasGoodSpeed && isFromTargetDirection) {
+          // Start a new streak or continue the current one
+          if (currentGoodStreak === 0) {
+            goodStreakStartTime = new Date(verificationData[i].time);
+          }
+          currentGoodStreak++;
+          goodStreakEndTime = new Date(verificationData[i].time);
+        } else {
+          // End of streak, check if it was long enough
+          if (currentGoodStreak > maxGoodStreak) {
+            maxGoodStreak = currentGoodStreak;
+          }
+          currentGoodStreak = 0;
+        }
+      }
+      
+      // Check the last streak too
+      if (currentGoodStreak > maxGoodStreak) {
+        maxGoodStreak = currentGoodStreak;
+      }
+      
+      // Calculate the duration of the streak in minutes
+      let streakDuration = 0;
+      if (maxGoodStreak >= 2 && goodStreakStartTime && goodStreakEndTime) {
+        streakDuration = Math.round((goodStreakEndTime - goodStreakStartTime) / (1000 * 60));
+      }
+      
+      // Check if the duration meets the criteria
+      const hasGoodDuration = streakDuration >= alarmSettings.verificationMinDuration;
+      
+      // Format the result
+      const result = {
+        hasEnoughData: true,
+        result: hasGoodDuration,
+        maxStreakPoints: maxGoodStreak,
+        streakDuration: streakDuration,
+        message: hasGoodDuration ? 
+          `✅ VERIFIED: Found ${streakDuration} minutes of good conditions between 6-8am` : 
+          `❌ NOT VERIFIED: Only found ${streakDuration} minutes of good conditions (need ${alarmSettings.verificationMinDuration})`
+      };
+      
+      return result;
+    }
+    
     drawChart();
   </script>
 </body>
