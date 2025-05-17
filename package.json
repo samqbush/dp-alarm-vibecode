@@ -1,0 +1,19 @@
+{
+  "name": "wind-scraper",
+  "version": "1.0.0",
+  "description": "Scrape wind data from WindAlert for Bear Creek Lake, CO.",
+  "main": "scrape_wind_puppeteer.js",
+  "type": "module",
+  "scripts": {
+    "scrape": "node scrape_wind_puppeteer.js",
+    "start": "node wind-app.js"
+  },
+  "dependencies": {
+    "csv-writer": "^1.6.0",
+    "node-fetch": "^3.3.2",
+    "open": "^10.1.2",
+    "puppeteer": "^21.11.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

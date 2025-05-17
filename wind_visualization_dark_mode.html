@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wind Data Visualization</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #f5f5f5;
+      --text-color: #333;
+      --heading-color: #0066cc;
+      --card-bg: #fff;
+      --info-bg: #e6f2ff;
+      --info-border: #0066cc;
+      --chart-bg: rgba(240, 240, 240, 0.5);
+      --shadow-color: rgba(0,0,0,0.1);
+    }
+    
+    .dark-mode {
+      --bg-color: #1a1a1a;
+      --text-color: #f0f0f0;
+      --heading-color: #4d94ff;
+      --card-bg: #2d2d2d;
+      --info-bg: #2c3e50;
+      --info-border: #4d94ff;
+      --chart-bg: rgba(60, 60, 60, 0.5);
+      --shadow-color: rgba(0,0,0,0.5);
+    }
+    
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 40px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    
+    h1 {
+      color: var(--heading-color);
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    #chart-container { 
+      width: 90vw; 
+      max-width: 900px; 
+      margin: auto;
+      background-color: var(--card-bg);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px var(--shadow-color);
+      transition: background-color 0.3s, box-shadow 0.3s;
+    }
+    .info-box {
+      background-color: var(--info-bg);
+      border-left: 4px solid var(--info-border);
+      padding: 10px 15px;
+      margin: 20px 0;
+      border-radius: 0 5px 5px 0;
+      transition: background-color 0.3s;
+    }
+    #trend-summary {
+      margin-top: 30px;
+      background-color: var(--card-bg);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px var(--shadow-color);
+      transition: background-color 0.3s, box-shadow 0.3s;
+    }
+    #arrows {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 20px;
+      background-color: var(--chart-bg);
+      padding: 10px;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+    .status-good {
+      color: #28a745;
+      font-weight: bold;
+    }
+    .status-warning {
+      color: #ffc107;
+      font-weight: bold;
+    }
+    .status-bad {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .footer {
+      text-align: center;
+      font-size: 0.8em;
+      margin-top: 30px;
+      color: var(--text-color);
+      opacity: 0.7;
+    }
+    .highlight {
+      background-color: rgba(255, 255, 0, 0.2);
+      padding: 0 3px;
+    }
+    .header-controls {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+    .dark-mode-toggle {
+      background-color: var(--card-bg);
+      border: 1px solid var(--info-border);
+      color: var(--text-color);
+      padding: 8px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    .dark-mode-toggle:hover {
+      background-color: var(--info-bg);
+    }
+    .refresh-btn {
+      margin-left: 10px;
+      background-color: var(--info-border);
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    .refresh-btn:hover, .settings-btn:hover {
+      opacity: 0.8;
+    }
+    .settings-btn {
+      margin-left: 10px;
+      background-color: var(--info-border);
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      transition: all 0.3s ease;
+    }
+    .modal-content {
+      position: relative;
+      background-color: var(--card-bg);
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 600px;
+      box-shadow: 0 4px 8px var(--shadow-color);
+      color: var(--text-color);
+    }
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      color: var(--text-color);
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .setting-item label {
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .setting-item label .value-indicator {
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .setting-item input[type="range"] {
+      width: 100%;
+    }
+    .save-settings-btn {
+      margin-top: 20px;
+      background-color: var(--info-border);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+    .save-settings-btn:hover {
+      opacity: 0.8;
+    }
+    @media (max-width: 768px) {
+      body { margin: 20px 10px; }
+      #chart-container { 
+        width: 100%; 
+        padding: 10px;
+      }
+      .header-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+      .modal-content {
+        margin: 5% auto;
+        width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Wind Trends at Bear Creek Lake (Soda Lake Dam 1)</h1>
+  
+  <div class="header-controls">
+    <button class="dark-mode-toggle" id="darkModeToggle">
+      <span id="darkModeIcon">🌙</span> <span id="darkModeText">Dark Mode</span>
+    </button>
+    <button class="refresh-btn" id="refreshBtn">
+      🔄 Refresh Data
+    </button>
+    <button class="settings-btn" id="settingsBtn">
+      ⚙️ Alarm Settings
+    </button>
+  </div>
+  
+  <div class="info-box">
+    <p>📊 Visualized wind speed, gusts, and direction for the <strong>2am-7am window</strong> with special focus on <span class="highlight">3am-5am</span> for alarm decision.</p>
+    <p>🔄 All wind speeds shown in mph (converted from source data in kph).</p>
+    <p>🔍 Yellow highlighted region shows the 3am-5am period that determines if conditions are alarm worthy.</p>
+  </div>
+  
+  <div id="chart-container">
+    <canvas id="windChart"></canvas>
+    <div id="arrows"></div>
+  </div>
+  
+  <div id="trend-summary"></div>
+  
+  <div class="footer">
+    <p>Data source: WindAlert.com | Last update: <span id="update-time"></span></p>
+  </div>
+  
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" id="closeSettings">&times;</span>
+      <h2>Alarm Criteria Settings</h2>
+      <p>Adjust the thresholds used to determine if wind conditions are alarm worthy. Changes will be saved automatically.</p>
+      
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Minimum Average Wind Speed <span class="value-indicator" id="minAvgSpeedValue">10 mph</span></label>
+          <input type="range" id="minAvgSpeed" min="5" max="20" step="0.5" value="10">
+          <small>Minimum average wind speed in mph during 3am-5am</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Minimum Direction Consistency <span class="value-indicator" id="minDirConsistencyValue">70%</span></label>
+          <input type="range" id="minDirConsistency" min="30" max="90" step="5" value="70">
+          <small>How consistent wind direction must be (percentage)</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Minimum Data Points <span class="value-indicator" id="minDataPointsValue">4</span></label>
+          <input type="range" id="minDataPoints" min="2" max="10" step="1" value="4">
+          <small>Minimum number of data points required for analysis</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Minimum Consecutive Points <span class="value-indicator" id="minConsecutivePointsValue">4</span></label>
+          <input type="range" id="minConsecutivePoints" min="2" max="10" step="1" value="4">
+          <small>Required number of consecutive good data points</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Minimum Point Wind Speed <span class="value-indicator" id="minPointSpeedValue">8 mph</span></label>
+          <input type="range" id="minPointSpeed" min="4" max="15" step="0.5" value="8">
+          <small>Minimum wind speed for a single data point to be "good"</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Max Direction Deviation <span class="value-indicator" id="maxDirDeviationValue">40°</span></label>
+          <input type="range" id="maxDirDeviation" min="20" max="90" step="5" value="40">
+          <small>Maximum allowed deviation in wind direction (degrees)</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Target Wind Direction <span class="value-indicator" id="targetDirectionValue">NW (315°)</span></label>
+          <input type="range" id="targetDirection" min="0" max="355" step="5" value="315">
+          <small>The desired wind direction to check for (degrees)</small>
+        </div>
+        
+        <div class="setting-item">
+          <label>Max Target Direction Diff <span class="value-indicator" id="maxTargetDirDiffValue">45°</span></label>
+          <input type="range" id="maxTargetDirDiff" min="15" max="90" step="5" value="45">
+          <small>How close wind must be to target direction (degrees)</small>
+        </div>
+      </div>
+      
+      <button id="saveSettings" class="save-settings-btn">Save Settings</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script>
+    // Default settings
+    const defaultSettings = {
+      minAvgSpeed: 10,          // Minimum average wind speed (mph) for alarm worthiness
+      minDirConsistency: 70,    // Minimum direction consistency (percentage)
+      minDataPoints: 4,         // Minimum data points required
+      minConsecutivePoints: 4,  // Minimum consecutive good data points
+      minPointSpeed: 8,         // Minimum wind speed for an individual point to be considered "good"
+      maxDirDeviation: 40,      // Maximum direction deviation (degrees)
+      targetDirection: 315,     // Target wind direction (NW = 315°)
+      maxTargetDirDiff: 45      // Maximum allowed difference from target direction (degrees)
+    };
+    
+    // Load settings from localStorage or use defaults
+    let savedSettings = JSON.parse(localStorage.getItem('windAlarmSettings')) || {};
+    // Merge saved settings with defaults to ensure all properties exist
+    let alarmSettings = {...defaultSettings, ...savedSettings};
+    
+    // Handle dark mode toggle and other UI interactions
+    document.addEventListener('DOMContentLoaded', () => {
+      const darkModeToggle = document.getElementById('darkModeToggle');
+      const darkModeIcon = document.getElementById('darkModeIcon');
+      const darkModeText = document.getElementById('darkModeText');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const settingsBtn = document.getElementById('settingsBtn');
+      const settingsModal = document.getElementById('settingsModal');
+      const closeSettings = document.getElementById('closeSettings');
+      const saveSettings = document.getElementById('saveSettings');
+      
+      // Initialize settings inputs
+      initializeSettingsControls();
+      
+      // Check for saved preference or system preference
+      const prefersDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const savedMode = localStorage.getItem('darkMode');
+      
+      // Set initial mode
+      if (savedMode === 'dark' || (savedMode !== 'light' && prefersDarkMode)) {
+        document.body.classList.add('dark-mode');
+        darkModeIcon.textContent = '☀️';
+        darkModeText.textContent = 'Light Mode';
+      }
+      
+      // Toggle dark mode
+      darkModeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        
+        if (document.body.classList.contains('dark-mode')) {
+          darkModeIcon.textContent = '☀️';
+          darkModeText.textContent = 'Light Mode';
+          localStorage.setItem('darkMode', 'dark');
+        } else {
+          darkModeIcon.textContent = '🌙';
+          darkModeText.textContent = 'Dark Mode';
+          localStorage.setItem('darkMode', 'light');
+        }
+        
+        // Update the chart
+        if (window.windChart) {
+          window.windChart.update();
+        }
+      });
+      
+      // Handle refresh button
+      refreshBtn.addEventListener('click', () => {
+        refreshBtn.textContent = '⏳ Refreshing...';
+        location.reload();
+      });
+      
+      // Handle settings modal
+      settingsBtn.addEventListener('click', () => {
+        settingsModal.style.display = 'block';
+      });
+      
+      closeSettings.addEventListener('click', () => {
+        settingsModal.style.display = 'none';
+      });
+      
+      window.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+          settingsModal.style.display = 'none';
+        }
+      });
+      
+      // Handle settings changes
+      const settingInputs = document.querySelectorAll('.setting-item input[type="range"]');
+      settingInputs.forEach(input => {
+        input.addEventListener('input', updateSettingValue);
+      });
+      
+      // Handle save settings
+      saveSettings.addEventListener('click', () => {
+        saveAlarmSettings();
+        settingsModal.style.display = 'none';
+        // Reanalyze data with new settings
+        if (window.currentWindData) {
+          document.getElementById('trend-summary').innerHTML = summarizeTrend(window.currentWindData);
+        }
+      });
+    });
+    
+    // Initialize settings controls with current values
+    function initializeSettingsControls() {
+      // Populate settings form with current values
+      document.getElementById('minAvgSpeed').value = alarmSettings.minAvgSpeed;
+      document.getElementById('minAvgSpeedValue').textContent = alarmSettings.minAvgSpeed + ' mph';
+      
+      document.getElementById('minDirConsistency').value = alarmSettings.minDirConsistency;
+      document.getElementById('minDirConsistencyValue').textContent = alarmSettings.minDirConsistency + '%';
+      
+      document.getElementById('minDataPoints').value = alarmSettings.minDataPoints;
+      document.getElementById('minDataPointsValue').textContent = alarmSettings.minDataPoints;
+      
+      document.getElementById('minConsecutivePoints').value = alarmSettings.minConsecutivePoints;
+      document.getElementById('minConsecutivePointsValue').textContent = alarmSettings.minConsecutivePoints;
+      
+      document.getElementById('minPointSpeed').value = alarmSettings.minPointSpeed;
+      document.getElementById('minPointSpeedValue').textContent = alarmSettings.minPointSpeed + ' mph';
+      
+      document.getElementById('maxDirDeviation').value = alarmSettings.maxDirDeviation;
+      document.getElementById('maxDirDeviationValue').textContent = alarmSettings.maxDirDeviation + '°';
+      
+      document.getElementById('targetDirection').value = alarmSettings.targetDirection;
+      document.getElementById('targetDirectionValue').textContent = getDirectionText(alarmSettings.targetDirection) + ' (' + alarmSettings.targetDirection + '°)';
+      
+      document.getElementById('maxTargetDirDiff').value = alarmSettings.maxTargetDirDiff;
+      document.getElementById('maxTargetDirDiffValue').textContent = alarmSettings.maxTargetDirDiff + '°';
+    }
+    
+    // Update setting display value as user adjusts slider
+    function updateSettingValue(e) {
+      const id = e.target.id;
+      const value = e.target.value;
+      const displayId = id + 'Value';
+      
+      // Add units to display value
+      let displayValue = value;
+      if (id === 'minAvgSpeed' || id === 'minPointSpeed') {
+        displayValue += ' mph';
+      } else if (id === 'minDirConsistency') {
+        displayValue += '%';
+      } else if (id === 'maxDirDeviation' || id === 'maxTargetDirDiff') {
+        displayValue += '°';
+      } else if (id === 'targetDirection') {
+        displayValue = getDirectionText(parseInt(value)) + ' (' + value + '°)';
+      }
+      
+      document.getElementById(displayId).textContent = displayValue;
+    }
+    
+    // Save settings to localStorage
+    function saveAlarmSettings() {
+      alarmSettings = {
+        minAvgSpeed: parseFloat(document.getElementById('minAvgSpeed').value),
+        minDirConsistency: parseFloat(document.getElementById('minDirConsistency').value),
+        minDataPoints: parseInt(document.getElementById('minDataPoints').value),
+        minConsecutivePoints: parseInt(document.getElementById('minConsecutivePoints').value),
+        minPointSpeed: parseFloat(document.getElementById('minPointSpeed').value),
+        maxDirDeviation: parseFloat(document.getElementById('maxDirDeviation').value),
+        targetDirection: parseInt(document.getElementById('targetDirection').value),
+        maxTargetDirDiff: parseFloat(document.getElementById('maxTargetDirDiff').value)
+      };
+      
+      localStorage.setItem('windAlarmSettings', JSON.stringify(alarmSettings));
+      console.log('Saved alarm settings:', alarmSettings);
+    }
+    
+    async function fetchCSV() {
+      // Add cache-busting parameter to prevent browser caching
+      const cacheBuster = new Date().getTime();
+      const response = await fetch(`wind_data.csv?v=${cacheBuster}`);
+      const text = await response.text();
+      return text;
+    }
+
+    function parseCSV(csv) {
+      const lines = csv.trim().split('\n');
+      const headers = lines[0].split(',');
+      const data = lines.slice(1).map(line => {
+        const values = line.split(',');
+        return Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+      });
+      // Only include rows with valid speed, gust, and direction data
+      return data.filter(row => 
+        row.windSpeed && !isNaN(parseFloat(row.windSpeed)) && 
+        row.windGust && !isNaN(parseFloat(row.windGust)) && 
+        row.windDirection && !isNaN(parseFloat(row.windDirection))
+      );
+    }
+
+    function formatTimeLabel(isoString) {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function drawArrows(labels, windDirections) {
+      const arrowsDiv = document.getElementById('arrows');
+      arrowsDiv.innerHTML = '';
+      windDirections.forEach((dir, i) => {
+        if (dir === null || isNaN(dir)) return; // Skip invalid direction values
+        
+        const arrow = document.createElement('div');
+        arrow.style.display = 'flex';
+        arrow.style.flexDirection = 'column';
+        arrow.style.alignItems = 'center';
+        arrow.style.width = '30px';
+        
+        // Add 180° to the rotation to make arrows point FROM the wind direction
+        // instead of TO the direction (meteorological convention)
+        const arrowRotation = (dir + 180) % 360;
+        
+        arrow.innerHTML = `
+          <span style="display:inline-block;transform:rotate(${arrowRotation}deg);font-size:1.5em;">↑</span>
+          <span style="font-size:0.7em;">${labels[i]}</span>
+        `;
+        arrowsDiv.appendChild(arrow);
+      });
+    }
+
+    function summarizeTrend(data) {
+      // Store data globally to enable reanalysis when settings change
+      window.currentWindData = data;
+      
+      // Get max values for the entire dataset
+      let maxGust = 0;
+      let maxGustTime = '';
+      let maxSpeed = 0;
+      let maxSpeedTime = '';
+      
+      data.forEach(row => {
+        const gustVal = row.windGust ? Number(row.windGust) : 0;
+        const speedVal = row.windSpeed ? Number(row.windSpeed) : 0;
+        
+        if (!isNaN(gustVal) && gustVal > maxGust) {
+          maxGust = gustVal;
+          maxGustTime = new Date(row.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        if (!isNaN(speedVal) && speedVal > maxSpeed) {
+          maxSpeed = speedVal;
+          maxSpeedTime = new Date(row.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      });
+      
+      // Only consider 3am–5am window for trend analysis
+      const startHour = 3;
+      const endHour = 5;
+      const filtered = data.filter(row => {
+        const d = new Date(row.time);
+        const h = d.getHours();
+        return h >= startHour && h < endHour;
+      });
+      
+      // Calculate averages for the 3am-5am window
+      let avgSpeed = 0;
+      let avgGust = 0;
+      let prevailingDirection = 0;
+      let directionConsistency = 0;
+      
+      if (filtered.length > 0) {
+        // Calculate average speed and gust
+        const validSpeeds = filtered.map(row => Number(row.windSpeed)).filter(val => !isNaN(val));
+        const validGusts = filtered.map(row => Number(row.windGust)).filter(val => !isNaN(val));
+        const validDirections = filtered.map(row => Number(row.windDirection)).filter(val => !isNaN(val));
+        
+        if (validSpeeds.length > 0) {
+          avgSpeed = validSpeeds.reduce((sum, val) => sum + val, 0) / validSpeeds.length;
+        }
+        
+        if (validGusts.length > 0) {
+          avgGust = validGusts.reduce((sum, val) => sum + val, 0) / validGusts.length;
+        }
+        
+        // Calculate prevailing direction and consistency
+        if (validDirections.length > 0) {
+          // Calculate average direction (considering circular nature of degrees)
+          const sinSum = validDirections.reduce((sum, dir) => sum + Math.sin(dir * Math.PI / 180), 0);
+          const cosSum = validDirections.reduce((sum, dir) => sum + Math.cos(dir * Math.PI / 180), 0);
+          prevailingDirection = Math.round((Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360);
+          
+          // Calculate standard deviation as a measure of consistency
+          const deviations = validDirections.map(dir => {
+            // Calculate the minimum angular distance considering 0° and 360° are the same
+            const rawDiff = Math.abs(dir - prevailingDirection);
+            return Math.min(rawDiff, 360 - rawDiff);
+          });
+          
+          const avgDeviation = deviations.reduce((sum, d) => sum + d, 0) / deviations.length;
+          directionConsistency = Math.max(0, 100 - (avgDeviation / 1.8)); // Convert to a 0-100 scale
+        }
+      }
+      
+      // More detailed analysis of wind consistency
+      let consistentSegments = [];
+      let currentSegment = [];
+      let maxConsecutivePoints =
+ 0;
+      
+      // Check for consecutive points with good conditions
+      if (filtered.length > 0) {
+        for (let i = 0; i < filtered.length; i++) {
+          const speed = Number(filtered[i].windSpeed);
+          const dir = Number(filtered[i].windDirection);
+          
+          // Skip invalid points
+          if (isNaN(speed) || isNaN(dir)) continue;
+          
+          // Use configurable threshold from settings
+          const isGoodPoint = speed >= alarmSettings.minPointSpeed;
+          
+          if (isGoodPoint) {
+            // Add to current segment
+            currentSegment.push(filtered[i]);
+            
+            // Check if we need to verify direction consistency
+            if (currentSegment.length >= 3) {
+              const directions = currentSegment.map(p => Number(p.windDirection));
+              const sinSum = directions.reduce((sum, d) => sum + Math.sin(d * Math.PI / 180), 0);
+              const cosSum = directions.reduce((sum, d) => sum + Math.cos(d * Math.PI / 180), 0);
+              const avgDir = Math.round((Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360);
+              
+              // Use configurable direction deviation threshold from settings
+              const isConsistent = directions.every(d => {
+                const rawDiff = Math.abs(d - avgDir);
+                return Math.min(rawDiff, 360 - rawDiff) <= alarmSettings.maxDirDeviation;
+              });
+              
+              if (!isConsistent) {
+                // Save segment if it's long enough using the configurable threshold
+                if (currentSegment.length >= alarmSettings.minConsecutivePoints) {
+                  consistentSegments.push([...currentSegment]);
+                }
+                // Start a new segment with the last 2 points
+                currentSegment = currentSegment.slice(-2);
+              }
+            }
+          } else {
+            // End of segment
+            if (currentSegment.length >= alarmSettings.minConsecutivePoints) {
+              consistentSegments.push([...currentSegment]);
+            }
+            currentSegment = [];
+          }
+        }
+        
+        // Don't forget to add the last segment if it's long enough
+        if (currentSegment.length >= alarmSettings.minConsecutivePoints) {
+          consistentSegments.push([...currentSegment]);
+        }
+        
+        // Find the longest consecutive streak
+        maxConsecutivePoints = Math.max(0, ...consistentSegments.map(s => s.length));
+      }
+      
+      // Use configurable thresholds for alarm worthiness criteria
+      const isSpeedGood = avgSpeed >= alarmSettings.minAvgSpeed;
+      const isDirectionConsistent = directionConsistency >= alarmSettings.minDirConsistency;
+      const hasEnoughData = filtered.length >= alarmSettings.minDataPoints;
+      const hasConsistentStreak = maxConsecutivePoints >= alarmSettings.minConsecutivePoints;
+      
+      // Check if wind is coming from the target direction (within the allowed difference)
+      const diffFromTarget = Math.abs(prevailingDirection - alarmSettings.targetDirection);
+      const isFromTargetDirection = Math.min(diffFromTarget, 360 - diffFromTarget) <= alarmSettings.maxTargetDirDiff;
+      
+      // Format direction as compass point
+      const directionText = getDirectionText(prevailingDirection);
+      
+      let trendMessage = '';
+      let alarmStatus = '';
+      
+      if (!hasEnoughData) {
+        trendMessage = 'Not enough data for 3–5am trend analysis.';
+        alarmStatus = '<span class="status-bad">⚠️ INSUFFICIENT DATA</span>';
+      } else {
+        trendMessage = `Average wind: <strong>${avgSpeed.toFixed(1)} mph</strong> from <strong>${directionText} (${prevailingDirection}°)</strong> with <strong>${directionConsistency.toFixed(0)}%</strong> direction consistency.`;
+        if (hasConsistentStreak) {
+          trendMessage += `<br>Found a streak of <strong>${maxConsecutivePoints}</strong> consecutive data points with good conditions.`;
+        }
+        
+        // Add information about target direction
+        const targetDirText = getDirectionText(alarmSettings.targetDirection);
+        trendMessage += `<br>Target direction: <strong>${targetDirText} (${alarmSettings.targetDirection}°)</strong>, within <strong>${alarmSettings.maxTargetDirDiff}°</strong>. `;
+        trendMessage += isFromTargetDirection ? 
+          `<span class="status-good">✅ Wind direction is good!</span>` : 
+          `<span class="status-bad">❌ Wind not from target direction.</span>`;
+        
+        if (isSpeedGood && isFromTargetDirection && (isDirectionConsistent || hasConsistentStreak)) {
+          alarmStatus = '<div class="status-good" style="font-size:1.3em">✅ ALARM WORTHY - Good conditions!</div>';
+        } else if (isSpeedGood && isFromTargetDirection) {
+          alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good speed and direction but not consistent enough</div>';
+        } else if (isSpeedGood && (isDirectionConsistent || hasConsistentStreak)) {
+          alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good speed but wrong direction</div>';
+        } else if (isFromTargetDirection && (isDirectionConsistent || hasConsistentStreak)) {
+          alarmStatus = '<div class="status-warning">⚠️ MARGINAL - Good direction but speed too low</div>';
+        } else {
+          alarmStatus = '<div class="status-bad">❌ NOT ALARM WORTHY - Poor conditions</div>';
+        }
+      }
+      
+      // Create a summary with trend analysis, alarm status, and max values
+      return `<div>
+                <h2>3am-5am Wind Analysis</h2>
+                <p>${trendMessage}</p>
+                <p>${alarmStatus}</p>
+                <p><strong>Max values (2am-7am window):</strong> Wind speed: ${maxSpeed.toFixed(1)} mph at ${maxSpeedTime} | Wind gust: ${maxGust.toFixed(1)} mph at ${maxGustTime}</p>
+                <p><strong>Current alarm criteria:</strong> Avg speed ≥ ${alarmSettings.minAvgSpeed} mph, Direction consistency ≥ ${alarmSettings.minDirConsistency}%, Min consecutive good points: ${alarmSettings.minConsecutivePoints}</p>
+                <p><small>Note: Analysis focuses on 3am-5am for alarm decision, but chart shows 2am-7am for context. <a href="#" onclick="document.getElementById('settingsBtn').click(); return false;">Adjust alarm settings</a></small></p>
+              </div>`;
+    }
+    
+    // Helper function to convert degrees to compass direction
+    function getDirectionText(degrees) {
+      const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+      const index = Math.round(degrees / 22.5) % 16;
+      return directions[index];
+    }
+
+    async function drawChart() {
+      const csv = await fetchCSV();
+      let allData = parseCSV(csv);
+      
+      // Set update time
+      document.getElementById('update-time').textContent = new Date().toLocaleString();
+      
+      // Filter data to show only the 2am to 7am window
+      const filteredData = allData.filter(row => {
+        const d = new Date(row.time);
+        const h = d.getHours();
+        return h >= 2 && h < 7; // Show only 2am to 7am
+      });
+      
+      // Use filtered data if it exists, otherwise use all data
+      const data = filteredData.length > 0 ? filteredData : allData;
+      
+      const labels = data.map(row => formatTimeLabel(row.time));
+      
+      // Debug: Print the raw data to console
+      console.log("Raw data from CSV (2am-7am window):", data);
+      
+      // Filter out any non-numeric values before converting to numbers
+      const windSpeed = data
+        .map(row => row.windSpeed ? parseFloat(row.windSpeed) : null)
+        .filter(val => val !== null && !isNaN(val));
+      
+      const windGust = data
+        .map(row => row.windGust ? parseFloat(row.windGust) : null)
+        .filter(val => val !== null && !isNaN(val));
+      
+      const windDirection = data
+        .map(row => row.windDirection ? parseFloat(row.windDirection) : null)
+        .filter(val => val !== null && !isNaN(val));
+      
+      // Debug: Print the processed arrays
+      console.log("Processed wind gust values:", windGust);
+
+      // Calculate max values manually to verify
+      let maxGustValue = 0;
+      for (const gust of windGust) {
+        if (gust > maxGustValue) maxGustValue = gust;
+      }
+      
+      let maxSpeedValue = 0;
+      for (const speed of windSpeed) {
+        if (speed > maxSpeedValue) maxSpeedValue = speed;
+      }
+      
+      console.log("Manual max calculation - Max gust:", maxGustValue, "Max speed:", maxSpeedValue);
+      
+      // Find max values for scaling after filtering invalid values
+      const maxGust = Math.max(...windGust);
+      const maxSpeed = Math.max(...windSpeed);
+      const absoluteMax = Math.max(maxGust, maxSpeed);
+      
+      // Create scaled y-axis max with some headroom
+      const yAxisMax = Math.ceil(absoluteMax / 5) * 5 + 5;
+      
+      console.log(`Data max values - Speed: ${maxSpeed}, Gust: ${maxGust}, Setting y-axis max to: ${yAxisMax}`);
+      
+      const ctx = document.getElementById('windChart').getContext('2d');
+      // Find data points for 3am and 5am to create annotations
+      const timeLabels = labels.slice(); // Make a copy
+      const timePoints = data.map(row => new Date(row.time));
+      
+      // Find indices for 3am and 5am data points
+      let start3amIndex = -1;
+      let end5amIndex = -1;
+      
+      for (let i = 0; i < timePoints.length; i++) {
+        const hour = timePoints[i].getHours();
+        if (hour === 3 && start3amIndex === -1) {
+          start3amIndex = i;
+        }
+        if (hour === 5 && end5amIndex === -1) {
+          end5amIndex = i;
+          break;
+        }
+      }
+      
+      console.log("Found 3am index:", start3amIndex, "and 5am index:", end5amIndex);
+      
+      // Create a custom plugin to shade the 3am-5am region
+      const targetAreaPlugin = {
+        id: 'targetAreaPlugin',
+        beforeDraw: (chart) => {
+          if (start3amIndex === -1 || end5amIndex === -1) return;
+          
+          const ctx = chart.ctx;
+          const xAxis = chart.scales.x;
+          const yAxis = chart.scales.y;
+          const startPixel = xAxis.getPixelForValue(start3amIndex);
+          const endPixel = xAxis.getPixelForValue(end5amIndex);
+          
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 255, 0, 0.1)';
+          ctx.fillRect(startPixel, yAxis.top, endPixel - startPixel, yAxis.bottom - yAxis.top);
+          
+          // Add vertical lines at 3am and 5am
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([5, 5]);
+          
+          // 3am line
+          ctx.moveTo(startPixel, yAxis.top);
+          ctx.lineTo(startPixel, yAxis.bottom);
+          
+          // 5am line
+          ctx.moveTo(endPixel, yAxis.top);
+          ctx.lineTo(endPixel, yAxis.bottom);
+          
+          ctx.stroke();
+          ctx.restore();
+        }
+      };
+      
+      // Register the custom plugin
+      Chart.register(targetAreaPlugin);
+      
+      // Create chart configuration with dark mode support
+      const chartConfig = {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Wind Speed (mph)',
+              data: data.map(row => row.windSpeed ? Number(row.windSpeed) : null), 
+              borderColor: () => document.body.classList.contains('dark-mode') ? '#4d94ff' : 'blue',
+              backgroundColor: () => document.body.classList.contains('dark-mode') ? 'rgba(77, 148, 255, 0.1)' : 'rgba(0,0,255,0.1)',
+              yAxisID: 'y',
+              tension: 0.2,
+              spanGaps: true
+            },
+            {
+              label: 'Wind Gust (mph)',
+              data: data.map(row => row.windGust ? Number(row.windGust) : null),
+              borderColor: () => document.body.classList.contains('dark-mode') ? '#ffa500' : 'orange',
+              backgroundColor: () => document.body.classList.contains('dark-mode') ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255,165,0,0.1)',
+              yAxisID: 'y',
+              tension: 0.2,
+              spanGaps: true,
+              pointRadius: function(context) {
+                const value = context.dataset.data[context.dataIndex];
+                return value > 30 ? 5 : 3;
+              },
+              pointHoverRadius: 8
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          stacked: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Wind Speed, Gust, and Direction (2am-7am)',
+              color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.dataset.label || '';
+                  const value = context.parsed.y || 0;
+                  return `${label}: ${value.toFixed(1)} mph`;
+                }
+              }
+            },
+            legend: {
+              position: 'top',
+              labels: {
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              },
+              grid: {
+                color: () => document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+              }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: { 
+                display: true, 
+                text: 'Speed/Gust (mph)',
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              },
+              max: yAxisMax,
+              min: 0,
+              ticks: {
+                stepSize: 5,
+                callback: function(value) {
+                  return value + ' mph';
+                },
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              },
+              grid: {
+                color: () => document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+              }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              title: { 
+                display: true, 
+                text: 'Direction (°)',
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              },
+              min: 0,
+              max: 360,
+              ticks: {
+                color: () => document.body.classList.contains('dark-mode') ? '#f0f0f0' : '#333'
+              }
+            }
+          }
+        }
+      };
+      
+      // Create and store chart reference globally
+      window.windChart = new Chart(ctx, chartConfig);
+      
+      // Draw wind direction arrows
+      drawArrows(labels, windDirection);
+      
+      // Update trend summary
+      document.getElementById('trend-summary').innerHTML = summarizeTrend(data);
+    }
+    drawChart();
+  </script>
+</body>
+</html>
