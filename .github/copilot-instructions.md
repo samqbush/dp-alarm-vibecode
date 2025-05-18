@@ -1,0 +1,2 @@
+Always check if the server is running with  `ps aux | grep "wind-app" | grep -v grep` before doing attempting to run npm or node commands
+Use `curl -I http://localhost:8080` to check if the server is running
