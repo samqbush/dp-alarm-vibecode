@@ -33,7 +33,7 @@ exec('node --experimental-modules --es-module-specifier-resolution=node scrape_w
   let port = 8080;
   const tryServer = () => {
     console.log(`Attempting to start server on port ${port}...`);
-    const server = spawn('npx', ['http-server', '.', '-p', port.toString(), '--silent'], { 
+    const server = spawn('npx', ['http-server', '.', '-p', port.toString()], { 
       cwd: __dirname,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -75,6 +75,8 @@ exec('node --experimental-modules --es-module-specifier-resolution=node scrape_w
       }
       const url = `http://localhost:${actualPort}/wind_visualization_dark_mode.html`;
       console.log(`🌐 Opening wind visualization at ${url}`);
+      // Print the link for the user to click
+      console.log(`\n👉 View your wind data visualization here: ${url}\n`);
       // Open the browser
       open(url);
     }
