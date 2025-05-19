@@ -1,4 +1,4 @@
-# Wind Trend Analyzer for Soda LakeLake
+# Wind Trend Analyzer for Soda Lake
 
 This application scrapes wind data from WindAlert for Bear Creek Lake, CO (Soda Lake Dam 1), visualizes it with focus on the early morning hours (2am-8am window), and analyzes wind conditions between 3am-5am to determine if they're favorable for beach activities. It also tracks prediction accuracy by comparing 3am-5am predictions with actual conditions during the 6am-8am window.
 
