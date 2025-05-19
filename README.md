@@ -1,17 +1,19 @@
-# Wind Trend Analyzer for Bear Creek Lake
+# Wind Trend Analyzer for Soda Lake
 
-This application scrapes wind data from WindAlert for Bear Creek Lake, CO (Soda Lake Dam 1), visualizes it with focus on the early morning hours (2am-7am window), and analyzes wind conditions between 3am-5am to determine if they're favorable for beach activities.
+This application scrapes wind data from WindAlert for Bear Creek Lake, CO (Soda Lake Dam 1), visualizes it with focus on the early morning hours (2am-8am window), and analyzes wind conditions between 3am-5am to determine if they're favorable for beach activities. It also tracks prediction accuracy by comparing 3am-5am predictions with actual conditions during the 6am-8am window.
 
 ## Features
 - Uses Puppeteer with stealth plugins to avoid detection
 - Fetches 24 hours of wind data from WindAlert
 - Converts wind speeds from kph to mph
 - Outputs data in CSV format
-- **Visualizes data with interactive HTML charts focusing on the 2am-7am window**
-- **Highlights the 3am-5am period for trend analysis**
+- **Visualizes data with interactive HTML charts focusing on the 2am-8am window**
+- **Highlights the 3am-5am period for trend analysis and 6am-8am for accuracy verification**
 - **Shows wind direction with intuitive directional arrows**
 - **Analyzes trend consistency during 3am-5am to determine "alarm worthiness"**
-- **User-configurable alarm criteria for customized alerts**
+- **Verifies prediction accuracy by analyzing the 6am-8am window for 15+ mph NW winds**
+- **Tracks and displays historical prediction accuracy percentages**
+- **User-configurable alarm criteria and verification thresholds**
 - **Visual indicators for wind quality and consistency**
 - **Mobile-friendly responsive design**
 - **Dark mode support with automatic system preference detection**
@@ -41,11 +43,14 @@ This will:
 3. Open the visualization in your default browser
 
 The visualization will:
-- Focus on the 2am-7am window
-- Highlight the 3am-5am period with yellow background
-- Show vertical marker lines at 3am and 5am
+- Focus on the 2am-8am window (prediction and verification periods)
+- Highlight the 3am-5am period with yellow background for prediction analysis
+- Highlight the 6am-8am period with light blue background for accuracy verification
+- Show vertical marker lines at 3am, 5am, 6am, and 8am
 - Analyze wind trends to determine if conditions are "alarm worthy"
-- Provide configurable alarm settings through the "⚙️ Alarm Settings" button
+- Verify accuracy by checking for 15+ mph NW winds between 6am-8am
+- Track prediction accuracy over time and display accuracy percentage
+- Provide configurable alarm and verification settings through the "⚙️ Alarm Settings" button
 
 If you prefer to run the steps separately:
 
@@ -71,6 +76,23 @@ The alarm status will show as:
 - **✅ ALARM WORTHY** - Good conditions detected
 - **⚠️ MARGINAL** - Some good conditions but not optimal
 - **❌ NOT ALARM WORTHY** - Poor conditions
+
+### Accuracy Verification Tracking
+
+The application validates prediction accuracy by checking actual wind conditions during the 6am-8am window:
+
+1. **Verification criteria** (configurable in settings):
+   - Minimum wind speed of 15 mph
+   - Wind direction from northwest (315°, adjustable)
+   - Good conditions lasting at least 60 minutes
+
+2. **Accuracy tracking features**:
+   - Automatic tracking of predictions vs. actual conditions
+   - Historical accuracy percentage calculation
+   - Daily record showing whether predictions were correct
+   - Last 7 days accuracy visualization with ✅/❌ indicators
+
+This accuracy tracking helps you assess the reliability of the 3am-5am window predictions for the actual conditions that develop during the 6am-8am beach window.
 
 ## Data Details
 The application scrapes wind data from WindAlert and:
@@ -99,6 +121,8 @@ The application scrapes wind data from WindAlert and:
 - Make sure you have a stable internet connection when running the scraper.
 - The visualization features both light and dark modes that automatically detect system preferences.
 - For best experience, view the visualization on a desktop or tablet device.
+- Accuracy tracking stores data in your browser's localStorage, allowing you to track prediction reliability over time.
+- Both prediction criteria (3am-5am window) and verification thresholds (6am-8am window) can be customized in the settings panel.
 - The 3am-5am window is highlighted as this is the critical time to determine if conditions are favorable for beach activities.
 
 ## Alarm Worthiness Logic
